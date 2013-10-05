@@ -7,7 +7,8 @@
 
 /* TODO
     All char types to be handled correctly.
-    More succint dispatch for char types, probably SFINAE-based.
+    More succint dispatch for char types, possibly SFINAE-based.
+    Principled, typeclass-like way to extend show. 
 */
 
 namespace show{
