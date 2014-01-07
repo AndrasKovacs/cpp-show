@@ -7,8 +7,7 @@
 
 /* TODO
     All char types to be handled correctly.
-    More succint dispatch for char types, possibly SFINAE-based.
-    Principled, typeclass-like way to extend show. 
+    More succint dispatch for char types, probably SFINAE-based.
 */
 
 namespace show{
@@ -44,9 +43,9 @@ namespace show{
 
         template<typename T>
         struct GetFormat{
-            template<typename, typename = IsTrivial<T>>  static Trivial   check(void*);
-            template<typename, typename = IsIterable<T>> static Iterable  check(void*);
-            template<typename>                           static Undefined check(...);
+            template<typename U, typename = IsTrivial<U>>  static Trivial   check(void*);
+            template<typename U, typename = IsIterable<U>> static Iterable  check(void*);
+            template<typename>                             static Undefined check(...);
             using type = decltype(check<T>(nullptr));
         };
 
@@ -166,8 +165,3 @@ namespace show{
     }
 
 } // namespace show
-
-
-
-
-
