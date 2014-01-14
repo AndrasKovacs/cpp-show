@@ -1,167 +1,148 @@
 #pragma once
 
+#include <type_traits>
 #include <string>
-#include <iostream>
 #include <sstream>
+#include <iostream>
+#include <vector>
 #include <tuple>
-
-/* TODO
-    All char types to be handled correctly.
-    More succint dispatch for char types, probably SFINAE-based.
-*/
 
 namespace show{
 
-    template<typename T>
-    std::string show(const T& t);
+template<typename T>
+struct Show {
+    static std::string show(const T&){
+        static_assert(expand_to_false<T>(), "no instance for class Show");
+    }
+private:
+    template<typename>
+    static constexpr bool expand_to_false(){return false;}
+};
 
-    namespace _dtl {
+template<typename T>
+struct Show_default{
+    static std::string show(const T& x){
+        std::stringstream out;
+        out << x;
+        return out.str();
+    }
+};
 
-        template<typename T>
-        constexpr bool expand_to_false(){return false;}
+template<typename T>
+std::string show(T&& x){
+    return Show<T>::show(std::forward<T>(x));
+};
 
-        template<std::size_t> struct Nat{};
-        template<typename...> struct TypeList{};
-
-        template<typename T> using IsIterable =
-            TypeList<decltype(std::begin(T{})),
-                     decltype(std::end(T{})),
-                     decltype(++std::begin(T{})),
-                     decltype(*std::begin(T{})),
-                     decltype(std::begin(T{}) != std::end(T{}))>;
-
-        template<typename T> using IsTrivial =
-            decltype(std::stringstream{}.operator<<(T{}));
-
-        struct Iterable;
-        struct Trivial;
-        struct Undefined;
-        struct Tuple;
-        struct Pair;
-        struct String;
-        struct Char;
-
-        template<typename T>
-        struct GetFormat{
-            template<typename U, typename = IsTrivial<U>>  static Trivial   check(void*);
-            template<typename U, typename = IsIterable<U>> static Iterable  check(void*);
-            template<typename>                             static Undefined check(...);
-            using type = decltype(check<T>(nullptr));
-        };
-
-        template<typename A, typename B>
-        struct GetFormat<std::pair<A, B>> {using type = Pair;};
-
-        template<typename... TS>
-        struct GetFormat<std::tuple<TS...>> {using type = Tuple;};
-
-        template<typename C, typename T, typename A>
-        struct GetFormat<std::basic_string<C, T, A>> {using type = String;};
-
-        template<typename T, size_t N>
-        struct GetFormat<T[N]> {using type = Iterable;};
-
-        template<size_t N> struct GetFormat<char[N]>     {using type = String;};
-        template<>         struct GetFormat<const char*> {using type = String;};
-        template<>         struct GetFormat<char*>       {using type = String;};
-        template<>         struct GetFormat<char>        {using type = Char;};
-
-        struct Iterable{
-            template<typename T>
-            std::string operator()(const T& t){
-                std::string res{};
-                auto it = std::begin(t);
-                auto finish = std::end(t);
-                res += "[";
-                if (it != finish){
-                    res += show(*it);
-                    ++it;
-                    for (;it != finish; ++it){
-                        res += ", ";
-                        res += show(*it);
-                    }
-                }
-                res += "]";
-                return res;
-            }
-        };
-
-        struct Trivial{
-            template<typename T>
-            std::string operator()(const T& t){
-                std::stringstream fmt{};
-                fmt.operator<<(t);
-                return fmt.str();
-            }
-        };
-
-        struct String{
-            template<typename T>
-            std::string operator()(const T& t){
-                return "\"" + std::string(t) + "\"";
-            }
-        };
-
-        struct Pair{
-            template<typename A, typename B>
-            std::string operator()(const std::pair<A, B>& p){
-                return "(" + show(p.first) + ", " + show(p.second) + ")";
-            }
-        };
-
-        struct Tuple{
-            template <typename... TS>
-            std::string operator()(const std::tuple<TS...>& tpl) {
-                std::string res{};
-                res += "(";
-                helper(res, tpl, Nat<sizeof...(TS) - 1>{});
-                res += ")";
-                return res;
-            }
-
-            template<typename T, std::size_t N>
-            void helper(std::string& res, const T &tpl, Nat<N>){
-                helper(res, tpl, Nat<N-1>{});
+template<typename T>
+struct Show_fwd_iterable{
+    static std::string show(const T& t){
+        std::string res{};
+        auto it = std::begin(t);
+        auto finish = std::end(t);
+        res += "[";
+        if (it != finish){
+            res += Show<decltype(*it)>::show(*it);
+            ++it;
+            for (;it != finish; ++it){
                 res += ", ";
-                res += show(std::get<N>(tpl));
+                res += Show<decltype(*it)>::show(*it);
             }
-
-            template<typename T>
-            void helper(std::string& res, const T &tpl, Nat<0>){
-                res += show(std::get<0>(tpl));
-            }
-        };
-
-        struct Char{
-            template<typename T>
-            std::string operator()(const T& t){
-                return std::string("'") + t + '\'';
-            }
-        };
-
-        struct Undefined{
-            template<typename T>
-            std::string operator()(const T&){
-                static_assert(expand_to_false<T>(), "Show undefined for type.");
-                return "";
-            }
-        };
-
-    } // namespace _dtl
-
-    template<typename T>
-    std::string show(const T& t){
-        return typename _dtl::GetFormat<T>::type{}(t);
+        }
+        res += "]";
+        return res;
     }
+};
 
-    void print(){
-        std::cout << std::endl;
+template<typename T>
+struct Show_tuple{
+    static std::string show(const T& t){
+        std::string res{};
+        res += '(';
+        show_tuple_help(res, t, Nat<std::tuple_size<T>::value>{});
+        res += ')';
+        return res;
     }
+private:
+    template<size_t> struct Nat{};
 
-    template<typename T, typename... TS>
-    void print(const T& t, const TS&... ts){
-        std::cout << show(t) << ' ';
-        print(ts...);
+    template<size_t i>
+    static void show_tuple_help(std::string& res, const T& t, Nat<i>){
+        show_tuple_help(res, t, Nat<i-1>{});
+        res += Show<decltype(std::get<i-1>(t))>::show(std::get<i-1>(t));
+        if (i != std::tuple_size<T>::value)
+            res += ", ";
     }
+    static void show_tuple_help(std::string&, const T&, Nat<0>){}
+};
+
+template<typename T> struct Show<const T>   : public Show<T> {};
+template<typename T> struct Show<T&>        : public Show<T> {};
+template<typename T> struct Show<T&&>       : public Show<T> {};
+template<typename T> struct Show<const T&>  : public Show<T> {};
+template<typename T> struct Show<const T&&> : public Show<T> {};
+
+template<> struct Show<char>:           public Show_default<char> {};
+template<> struct Show<char16_t>:       public Show_default<char16_t> {};
+template<> struct Show<char32_t>:       public Show_default<char32_t> {};
+template<> struct Show<wchar_t>:        public Show_default<wchar_t> {};
+template<> struct Show<unsigned char>:  public Show_default<unsigned char> {};
+template<> struct Show<short>:          public Show_default<short> {};
+template<> struct Show<unsigned short>: public Show_default<unsigned short> {};
+template<> struct Show<int>:            public Show_default<int> {};
+template<> struct Show<unsigned>:       public Show_default<unsigned> {};
+template<> struct Show<long>:           public Show_default<long> {};
+template<> struct Show<unsigned long>:  public Show_default<unsigned long> {};
+template<> struct Show<float>:          public Show_default<float> {};
+template<> struct Show<double>:         public Show_default<double> {};
+template<> struct Show<long double>:    public Show_default<long double> {};
+
+template<size_t N, typename T>
+struct Show<T[N]> : public Show_fwd_iterable<T[N]>{};
+
+template<typename T, typename A>
+struct Show<std::vector<T, A>> : public Show_fwd_iterable<std::vector<T, A>> {};
+
+template<typename C, typename T, typename A>
+struct Show<std::basic_string<C, T, A>> {
+    static std::string show(const std::basic_string<C, T, A>& x){
+        return '"' + x + '"';
+    }
+};
+
+template<typename A, typename B>
+struct Show<std::pair<A, B>> {
+    static std::string show(const std::pair<A, B>& p){
+        return "(" + Show<A>::show(p.first) + ", " + Show<B>::show(p.second) + ")";
+    }
+};
+
+template<size_t N>
+struct Show<char[N]> {
+    static std::string show(char const(&s)[N]){
+        return std::string("\"") + s + '"';
+    }
+};
+
+template<>
+struct Show<bool>{
+    static std::string show(const bool& x){
+        return x ? "true" : "false";
+    }
+};
+
+template<typename...TS>
+struct Show<std::tuple<TS...>> : public Show_tuple<std::tuple<TS...>> {};
+
+
+void print(){
+    std::cout << '\n';
+}
+
+template<typename T, typename...TS>
+void print(T&& x, TS&&... xs){
+    std::cout << show(std::forward<T>(x)) << " ";
+    print(std::forward<TS>(xs)...);
+}
 
 } // namespace show
+
