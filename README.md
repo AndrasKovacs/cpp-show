@@ -1,4 +1,4 @@
 cpp-show
 ========
 
-Converting C++11 types and containers to strings universally.
+Typeclass (or Concept) style implementation for generic and extensible conversion to std::string. 
