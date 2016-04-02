@@ -1,7 +1,7 @@
 cpp-show
 ========
 
-EDIT: it's just a learning project, and now highly it's deprecated and I'm sure there are many far more usable solutions. I advise not using this.
+*This was just a learning project, and now highly it's deprecated and I'm sure there are many far more usable solutions. I advise not using this.*
 
 Typeclass (or Concept) style implementation for generic and extensible conversion to `std::string`. 
 
